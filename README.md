@@ -74,6 +74,16 @@ M9,localhost,9009
 ```
 Each CouncilMember reads this file on startup to know where to connect.
 
+### ⚠️ Port Availability Note ###
+
+The network.config file defines the TCP ports each council member uses (default: 9001–9009).
+The run_tests.sh script automatically attempts to free these ports before each run.
+However, if any of these ports are already in use by another program, Paxos members may fail to start.
+If that happens, either:
+
+- Close the conflicting applications, or
+- Edit network.config to use a different range of available ports.
+
 ## Test Scenarios (automated)
 Your run_tests.sh script automatically runs the following scenarios:
 
