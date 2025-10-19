@@ -16,6 +16,7 @@ public class CouncilMember implements PaxosNode {
     private String acceptedValue = null;
     private int acceptedProposalNumber = -1;
     private volatile boolean isRunning = true;
+    private volatile boolean hasReachedConsensus = false;
     private final Random random = new Random();
     private ServerSocket serverSocket;
     private final ExecutorService executor = Executors.newCachedThreadPool();
@@ -26,24 +27,38 @@ public class CouncilMember implements PaxosNode {
         this.memberId = memberId;
         this.profile = "standard";
         this.networkConfig = NetworkConfig.loadConfig(configFile);
+        this.hasReachedConsensus = false;
     }
 
     @Override
     public void start() {
-        try {
-            String[] hostPort = networkConfig.get(memberId).split(":");
-            serverSocket = new ServerSocket(Integer.parseInt(hostPort[1]));
-            System.out.println(memberId + " started on port " + hostPort[1]);
+        String[] hostPort = networkConfig.get(memberId).split(":");
+        int port = Integer.parseInt(hostPort[1]);
 
-            // Start server thread
-            executor.execute(this::runServer);
-
-            // Start console input thread
-            executor.execute(this::readConsoleInput);
-        } catch (IOException e) {
-            System.err.println(memberId + " failed to start: " + e.getMessage());
+        // Try up to 3 times if port is busy
+        for (int attempt = 1; attempt <= 3; attempt++) {
+            try {
+                serverSocket = new ServerSocket(port);
+                System.out.println(memberId + " started on port " + port);
+                executor.execute(this::runServer);
+                executor.execute(this::readConsoleInput);
+                return; // success
+            } catch (BindException e) {
+                System.err.println(memberId + " port " + port + " busy (attempt " + attempt + "), retrying...");
+                try {
+                    Thread.sleep(1000);
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                }
+            } catch (IOException e) {
+                System.err.println(memberId + " failed to start: " + e.getMessage());
+                return;
+            }
         }
+
+        System.err.println(memberId + " failed to start after multiple attempts (port likely still bound).");
     }
+
 
     @Override
     public void setProfile(String profile) {
@@ -52,20 +67,22 @@ public class CouncilMember implements PaxosNode {
 
     @Override
     public void propose(String candidate) {
-        if (!isRunning) return;
+        if (!isRunning || hasReachedConsensus) return;
         String proposalNumber = proposalCounter.incrementAndGet() + "." + memberId;
         receivedPromises.clear();
         receivedAccepts.clear();
-        acceptedValue = candidate; // Set the proposed candidate
+        acceptedValue = candidate;
 
-        // Phase 1: PREPARE
         broadcastMessage("PREPARE:" + memberId + ":" + proposalNumber + ":" + candidate);
     }
 
     @Override
     public void receiveMessage(String message) {
         System.out.println(memberId + " received: " + message);
-        if (!isRunning || shouldDropMessage()) return;
+        if (!isRunning || hasReachedConsensus || shouldDropMessage()) {
+            System.out.println(memberId + " dropped message: " + message);
+            return;
+        }
 
         try {
             Thread.sleep(simulateLatency());
@@ -93,7 +110,7 @@ public class CouncilMember implements PaxosNode {
     }
 
     private void runServer() {
-        while (isRunning) {
+        while (isRunning && !hasReachedConsensus) {
             try {
                 Socket client = serverSocket.accept();
                 executor.execute(() -> {
@@ -103,7 +120,9 @@ public class CouncilMember implements PaxosNode {
                             receiveMessage(message);
                         }
                     } catch (IOException e) {
-                        System.err.println(memberId + " error receiving message: " + e.getMessage());
+                        if (isRunning && !hasReachedConsensus) {
+                            System.err.println(memberId + " error receiving message: " + e.getMessage());
+                        }
                     } finally {
                         try {
                             client.close();
@@ -113,7 +132,7 @@ public class CouncilMember implements PaxosNode {
                     }
                 });
             } catch (IOException e) {
-                if (isRunning) {
+                if (isRunning && !hasReachedConsensus) {
                     System.err.println(memberId + " server error: " + e.getMessage());
                 }
             }
@@ -122,7 +141,7 @@ public class CouncilMember implements PaxosNode {
 
     private void readConsoleInput() {
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(System.in))) {
-            while (isRunning) {
+            while (isRunning && !hasReachedConsensus) {
                 String input = reader.readLine();
                 if (input != null && !input.trim().isEmpty()) {
                     System.out.println(memberId + " proposing: " + input.trim());
@@ -154,11 +173,12 @@ public class CouncilMember implements PaxosNode {
         String proposalNumber = parts[2];
 
         synchronized (receivedPromises) {
+            if (hasReachedConsensus) return;
             receivedPromises.add(responderId);
-            if (receivedPromises.size() >= 2) { // Majority for 3 nodes
-                // Use the candidate from the original PREPARE message
+            if (receivedPromises.size() >= 3) { // Majority for 5 nodes
                 if (acceptedValue != null) {
                     broadcastMessage("ACCEPT_REQUEST:" + memberId + ":" + proposalNumber + ":" + acceptedValue);
+                    receivedPromises.clear();
                 } else {
                     System.err.println(memberId + " error: No candidate available for ACCEPT_REQUEST");
                 }
@@ -175,9 +195,7 @@ public class CouncilMember implements PaxosNode {
             highestProposalNumber = parseProposalNumber(proposalNumber);
             acceptedProposalNumber = parseProposalNumber(proposalNumber);
             acceptedValue = candidate;
-            // Count own ACCEPTED vote
             processAcceptVote(memberId, candidate);
-            // Broadcast ACCEPTED to all nodes
             broadcastMessage("ACCEPTED:" + memberId + ":" + proposalNumber + ":" + candidate);
         }
     }
@@ -193,10 +211,13 @@ public class CouncilMember implements PaxosNode {
 
     private void processAcceptVote(String voterId, String candidate) {
         synchronized (receivedAccepts) {
+            if (hasReachedConsensus) return;
             receivedAccepts.add(voterId);
-            if (receivedAccepts.size() >= 2) { // Majority
+            if (receivedAccepts.size() >= 3) { // Majority for 5 nodes
                 System.out.println("CONSENSUS: " + candidate + " has been elected Council President!");
+                hasReachedConsensus = true;
                 isRunning = false;
+                receivedAccepts.clear();
                 executor.shutdown();
                 try {
                     serverSocket.close();
@@ -216,7 +237,7 @@ public class CouncilMember implements PaxosNode {
     }
 
     private void sendMessage(String targetId, String message) {
-        if (shouldDropMessage()) {
+        if (!isRunning || hasReachedConsensus || shouldDropMessage()) {
             System.out.println(memberId + " dropped message to " + targetId + ": " + message);
             return;
         }
@@ -250,6 +271,7 @@ public class CouncilMember implements PaxosNode {
         if (profile.equals("failure") && random.nextDouble() < 0.3) {
             if (random.nextDouble() < 0.1) {
                 isRunning = false;
+                hasReachedConsensus = true;
                 executor.shutdown();
                 try {
                     serverSocket.close();
