@@ -5,19 +5,7 @@ M3 proposing candidate M3 with proposal 1.M3
 M3 broadcasting: PREPARE:M3:1.M3:M3
 M3 sending to M1: PREPARE:M3:1.M3:M3
 M3 sending to M2: PREPARE:M3:1.M3:M3
-M3 dropped message to M4: PREPARE:M3:1.M3:M3
-M3 sending to M5: PREPARE:M3:1.M3:M3
+M3 sending to M4: PREPARE:M3:1.M3:M3
+M3 dropped message to M5: PREPARE:M3:1.M3:M3
 M3 sending to M6: PREPARE:M3:1.M3:M3
-M3 sending to M7: PREPARE:M3:1.M3:M3
-M3 sending to M8: PREPARE:M3:1.M3:M3
-M3 sending to M9: PREPARE:M3:1.M3:M3
-M3 received: PROMISE:M1:1.M3
-M3 dropped message: PROMISE:M1:1.M3
-M3 received: PROMISE:M8:1.M3
-M3 received: PROMISE:M6:1.M3
-M3 received: PROMISE:M7:1.M3
-M3 dropped message: PROMISE:M7:1.M3
-M3 received: PROMISE:M5:1.M3
-M3 received: PROMISE:M9:1.M3
-M3 received: PROMISE:M2:1.M3
-M3 dropped message: PROMISE:M2:1.M3
+M3 has crashed!
