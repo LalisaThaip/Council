@@ -150,6 +150,10 @@ public class CouncilMember implements PaxosNode {
      */
     @Override
     public void propose(String candidate) {
+        if (hasReachedConsensus) {
+            return; // Ignore everything if consensus reached
+        }
+
         if (isRunning && !hasReachedConsensus) {
             // Generate a unique proposal number (counter.memberId, e.g., "1.M4").
             String proposalNumber = proposalCounter.incrementAndGet() + "." + memberId;
@@ -175,50 +179,43 @@ public class CouncilMember implements PaxosNode {
      */
     @Override
     public void receiveMessage(String message) {
-        System.out.println(memberId + " received: " + message);
-        if (isRunning && !hasReachedConsensus && !shouldDropMessage()) {
-            // Simulate network latency based on profile.
-            try {
-                Thread.sleep(simulateLatency());
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
+        synchronized (this) {
+            if (hasReachedConsensus) {
+                return; // Ignore everything if consensus reached
             }
 
-            // Parse message into parts (type:sender:proposalNumber:value).
-            String[] parts = message.split(":");
-            if (parts.length < 3) {
-                System.err.println(memberId + " invalid message format: " + message);
-                return;
-            }
+            System.out.println(memberId + " received: " + message);
+            if (isRunning && !shouldDropMessage()) {
+                try { Thread.sleep(simulateLatency()); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
 
-            // Handle message based on type.
-            switch (parts[0]) {
-                case "PREPARE":
-                    if (parts.length == 4) {
-                        handlePrepare(parts);
-                    }
-                    break;
-                case "PROMISE":
-                    handlePromise(parts);
-                    break;
-                case "ACCEPT_REQUEST":
-                    if (parts.length == 4) {
-                        handleAcceptRequest(parts);
-                    }
-                    break;
-                case "ACCEPTED":
-                    if (parts.length == 4) {
-                        handleAccepted(parts);
-                    }
-                    break;
-                default:
-                    System.err.println(memberId + " unknown message type: " + parts[0]);
+                String[] parts = message.split(":");
+                if (parts.length < 3) {
+                    System.err.println(memberId + " invalid message format: " + message);
+                    return;
+                }
+
+                switch (parts[0]) {
+                    case "PREPARE":
+                        if (parts.length == 4) handlePrepare(parts);
+                        break;
+                    case "PROMISE":
+                        handlePromise(parts);
+                        break;
+                    case "ACCEPT_REQUEST":
+                        if (parts.length == 4) handleAcceptRequest(parts);
+                        break;
+                    case "ACCEPTED":
+                        if (parts.length == 4) handleAccepted(parts);
+                        break;
+                    default:
+                        System.err.println(memberId + " unknown message type: " + parts[0]);
+                }
+            } else {
+                System.out.println(memberId + " dropped message: " + message);
             }
-        } else {
-            // Log if message is dropped due to node state or profile.
-            System.out.println(memberId + " dropped message: " + message);
         }
     }
+
 
     /**
      * Runs the server loop to accept and process incoming Paxos messages.
@@ -364,12 +361,16 @@ public class CouncilMember implements PaxosNode {
      * @param parts Message parts: [0]=ACCEPTED, [1]=responderId, [2]=proposalNumber, [3]=candidate.
      */
     private void handleAccepted(String[] parts) {
-        String responderId = parts[1];
-        String proposalNumber = parts[2];
-        String candidate = parts[3];
-        System.out.println(memberId + " handling ACCEPTED: " + String.join(":", parts));
-        processAcceptVote(responderId, candidate);
+        synchronized (this) {
+            if (hasReachedConsensus) return;
+
+            String responderId = parts[1];
+            String candidate = parts[3];
+            System.out.println(memberId + " handling ACCEPTED: " + String.join(":", parts));
+            processAcceptVote(responderId, candidate);
+        }
     }
+
 
     /**
      * Processes an acceptance vote for a candidate.
@@ -379,28 +380,25 @@ public class CouncilMember implements PaxosNode {
      * @param candidate The accepted candidate (e.g., "M5").
      */
     private void processAcceptVote(String voterId, String candidate) {
-        synchronized (receivedAccepts) {
-            if (!hasReachedConsensus) {
-                // Add voter to the list of acceptances.
-                receivedAccepts.add(voterId);
-                // Check if majority (5 of 9 nodes) has been reached.
-                if (receivedAccepts.size() >= 5) {
-                    System.out.println("CONSENSUS: " + candidate + " has been elected Council President!");
-                    hasReachedConsensus = true;
-                    isRunning = false;
-                    receivedAccepts.clear();
-                    // Shut down executor and close sockets.
-                    executor.shutdown();
-                    try {
-                        serverSocket.close();
-                        inputSocket.close();
-                    } catch (IOException e) {
-                        // Ignore socket close errors.
-                    }
-                }
+        synchronized (this) {
+            if (hasReachedConsensus) return;
+
+            receivedAccepts.add(voterId);
+            int majority = (networkConfig.size() / 2) + 1;
+            if (receivedAccepts.size() >= majority) {
+                System.out.println("CONSENSUS: " + candidate + " has been elected Council President!");
+                hasReachedConsensus = true;
+                isRunning = false;
+                receivedAccepts.clear();
+                executor.shutdownNow();
+                try {
+                    if (serverSocket != null && !serverSocket.isClosed()) serverSocket.close();
+                    if (inputSocket != null && !inputSocket.isClosed()) inputSocket.close();
+                } catch (IOException ignored) {}
             }
         }
     }
+
 
     /**
      * Broadcasts a message to all other council members.
@@ -409,6 +407,10 @@ public class CouncilMember implements PaxosNode {
      * @param message The Paxos message to broadcast (e.g., "PREPARE:M4:1.M4:M5").
      */
     private void broadcastMessage(String message) {
+        if (hasReachedConsensus) {
+            return; // Ignore everything if consensus reached
+        }
+
         System.out.println(memberId + " broadcasting: " + message);
         for (String targetId : networkConfig.keySet()) {
             if (!targetId.equals(memberId)) {

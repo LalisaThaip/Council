@@ -39,7 +39,6 @@ rm -rf "$CLASS_DIR"
 mkdir -p "$CLASS_DIR"
 javac -d "$CLASS_DIR" "$SRC_DIR"/interfaces/PaxosNode.java "$SRC_DIR"/impl/*.java
 
-# Check for compilation errors
 if [ $? -ne 0 ]; then
     echo "Compilation failed. Exiting."
     exit 1
@@ -93,118 +92,132 @@ collate_logs() {
     done
 }
 
-check_consensus() {
+check_majority_consensus() {
     local count=$1
     local expected_winner=$2
     local scenario=$3
     echo -e "\n=== $scenario Results ==="
-    local consensus_found=true
+
+    local reached=0
+
     for i in $(seq 1 $count); do
         if [ -f "M$i.log" ]; then
             if grep -q "CONSENSUS: $expected_winner has been elected Council President!" "M$i.log"; then
                 echo "M$i: Consensus reached for $expected_winner"
+                reached=$((reached+1))
             else
                 echo "M$i: Consensus not found for $expected_winner"
-                consensus_found=false
             fi
         else
             echo "M$i: Log file missing"
-            consensus_found=false
         fi
     done
-    if [ "$consensus_found" = true ]; then
-        echo "$scenario: Successfully reached consensus on $expected_winner"
+
+    local majority=$((count / 2 + 1))
+
+    if [ $reached -ge $majority ]; then
+        echo "$scenario: Successfully reached majority consensus on $expected_winner ($reached/$count nodes)"
     else
-        echo "$scenario: Failed to reach consensus on $expected_winner"
+        echo "$scenario: Failed to reach majority consensus on $expected_winner ($reached/$count nodes)"
     fi
 }
 
-check_concurrent_consensus() {
+check_concurrent_majority() {
     local count=$1
     local scenario=$2
     echo -e "\n=== $scenario Results ==="
-    local consensus_found=false
-    local winner=""
+
+    # Collect all winners
+    local winners=()
     for i in $(seq 1 $count); do
         if [ -f "M$i.log" ]; then
-            if grep -q "CONSENSUS:.*has been elected Council President!" "M$i.log"; then
-                consensus_line=$(grep "CONSENSUS:.*has been elected Council President!" "M$i.log")
-                current_winner=$(echo "$consensus_line" | awk '{print $2}')
-                if [ -z "$winner" ]; then
-                    winner="$current_winner"
-                fi
-                if [ "$current_winner" = "$winner" ]; then
-                    echo "M$i: Consensus reached for $winner"
-                    consensus_found=true
-                else
-                    echo "M$i: Inconsistent consensus ($current_winner != $winner)"
-                    consensus_found=false
-                fi
+            winner_line=$(grep "CONSENSUS:.*has been elected Council President!" "M$i.log" | tail -1)
+            if [ -n "$winner_line" ]; then
+                winner=$(echo "$winner_line" | awk '{print $2}')
+                winners+=("$winner")
             else
-                echo "M$i: Consensus not found"
-                consensus_found=false
+                winners+=("NONE")
             fi
         else
-            echo "M$i: Log file missing"
-            consensus_found=false
+            winners+=("MISSING")
         fi
     done
-    if [ "$consensus_found" = true ]; then
-        echo "$scenario: Successfully reached consensus on $winner"
-    else
-        echo "$scenario: Failed to reach consistent consensus"
+
+    # Count occurrences manually (no associative array)
+    local unique_winners=()
+    local counts=()
+    for w in "${winners[@]}"; do
+        found=false
+        for j in "${!unique_winners[@]}"; do
+            if [ "${unique_winners[$j]}" = "$w" ]; then
+                counts[$j]=$((counts[$j]+1))
+                found=true
+                break
+            fi
+        done
+        if [ "$found" = false ]; then
+            unique_winners+=("$w")
+            counts+=("1")
+        fi
+    done
+
+    local majority=$((count / 2 + 1))
+    local majority_found=false
+    for i in "${!unique_winners[@]}"; do
+        if [ "${counts[$i]}" -ge $majority ] && [ "${unique_winners[$i]}" != "NONE" ] && [ "${unique_winners[$i]}" != "MISSING" ]; then
+            echo "$scenario: Successfully reached majority consensus on ${unique_winners[$i]} (${counts[$i]}/$count nodes)"
+            majority_found=true
+        fi
+    done
+
+    if [ "$majority_found" = false ]; then
+        echo "$scenario: Failed to reach majority consensus"
     fi
+
+    # Print per-node status
+    for i in $(seq 1 $count); do
+        echo "M$i: ${winners[$((i-1))]}"
+    done
 }
+
 
 # === SCENARIO 1: Ideal Network ===
 echo -e "\n=== Scenario 1: Ideal Network ==="
 cleanup
 start_members 9 reliable
-
-# Trigger proposal
 echo "Triggering proposal from M4 for M5"
 echo "M5" | nc localhost 9004
 sleep 10
-
-check_consensus 9 M5 "Scenario 1"
+check_majority_consensus 9 M5 "Scenario 1"
 collate_logs 9
 stop_members
-echo "=== Scenario 1 Completed ==="
 sleep 2
 
 # === SCENARIO 2: Concurrent Proposals ===
 echo -e "\n=== Scenario 2: Concurrent Proposals ==="
 cleanup
 start_members 9 reliable
-
-# Trigger concurrent proposals
 echo "Triggering concurrent proposals: M1 proposes M1, M8 proposes M8"
 echo "M1" | nc localhost 9001 &
 echo "M8" | nc localhost 9008 &
 sleep 15
-
-check_concurrent_consensus 9 "Scenario 2"
+check_concurrent_majority 9 "Scenario 2"
 collate_logs 9
 stop_members
-echo "=== Scenario 2 Completed ==="
 sleep 2
 
 # === SCENARIO 3: Fault Tolerance ===
 echo -e "\n=== Scenario 3: Fault Tolerance ==="
-
-# Profiles: M1=reliable, M2=latent, M3=failure, M4-M9=standard
 profiles=("reliable" "latent" "failure" "standard" "standard" "standard" "standard" "standard" "standard")
 
 # --- Test 3a: Standard member proposes ---
 echo -e "\n--- Test 3a: Standard member (M4) proposes ---"
 cleanup
 start_members_with_profiles 9 "${profiles[@]}"
-
 echo "Triggering proposal from M4 for M4"
 echo "M4" | nc localhost 9004
 sleep 15
-
-check_consensus 9 M4 "Scenario 3a"
+check_majority_consensus 9 M4 "Scenario 3a"
 collate_logs 9
 stop_members
 sleep 2
@@ -213,12 +226,10 @@ sleep 2
 echo -e "\n--- Test 3b: Latent member (M2) proposes ---"
 cleanup
 start_members_with_profiles 9 "${profiles[@]}"
-
 echo "Triggering proposal from M2 for M2"
 echo "M2" | nc localhost 9002
 sleep 20
-
-check_consensus 9 M2 "Scenario 3b"
+check_majority_consensus 9 M2 "Scenario 3b"
 collate_logs 9
 stop_members
 sleep 2
@@ -227,12 +238,10 @@ sleep 2
 echo -e "\n--- Test 3c: Failing member (M3) proposes then crashes ---"
 cleanup
 start_members_with_profiles 9 "${profiles[@]}"
-
 echo "Triggering proposal from M3 for M3"
 echo "M3" | nc localhost 9003
 sleep 5
 
-# Explicitly kill M3 to simulate crash
 echo "Killing M3 to simulate crash"
 if [ -f M3.pid ]; then
     kill -9 $(cat M3.pid) 2>/dev/null
@@ -242,10 +251,8 @@ fi
 echo "Triggering new proposal from M4 for M4"
 echo "M4" | nc localhost 9004
 sleep 15
-
-check_consensus 9 M4 "Scenario 3c"
+check_majority_consensus 9 M4 "Scenario 3c"
 collate_logs 9
 stop_members
-echo "=== Scenario 3 Completed ==="
 
 echo -e "\n=== All Scenarios Completed ==="

@@ -7,16 +7,4 @@ M3 sending to M1: PREPARE:M3:1.M3:M3
 M3 sending to M2: PREPARE:M3:1.M3:M3
 M3 sending to M4: PREPARE:M3:1.M3:M3
 M3 sending to M5: PREPARE:M3:1.M3:M3
-M3 dropped message to M6: PREPARE:M3:1.M3:M3
-M3 sending to M7: PREPARE:M3:1.M3:M3
-M3 dropped message to M8: PREPARE:M3:1.M3:M3
-M3 sending to M9: PREPARE:M3:1.M3:M3
-M3 received: PROMISE:M1:1.M3
-M3 received: PROMISE:M9:1.M3
-M3 received: PROMISE:M7:1.M3
-M3 dropped message: PROMISE:M7:1.M3
-M3 received: PROMISE:M4:1.M3
-M3 dropped message: PROMISE:M4:1.M3
-M3 received: PROMISE:M5:1.M3
-M3 dropped message: PROMISE:M5:1.M3
-M3 received: PROMISE:M2:1.M3
+M3 has crashed!
