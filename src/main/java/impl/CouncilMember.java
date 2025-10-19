@@ -1,6 +1,5 @@
-package impl;
+package main.java.impl;
 
-import interfaces.PaxosNode;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
@@ -15,6 +14,8 @@ import java.util.Random;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
+
+import main.java.interfaces.PaxosNode;
 
 /**
  * Implements the Paxos consensus algorithm as a council member node.
@@ -57,6 +58,11 @@ public class CouncilMember implements PaxosNode {
     private final List<String> receivedPromises = new ArrayList<>();
     // List of member IDs that sent ACCEPTED messages for the current value.
     private final List<String> receivedAccepts = new ArrayList<>();
+
+    // for testing
+    public String getMemberId() {
+        return memberId;
+    }
 
     /**
      * Constructs a CouncilMember with a given ID and configuration file.

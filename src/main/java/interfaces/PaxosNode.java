@@ -1,4 +1,4 @@
-package interfaces;
+package main.java.interfaces;
 
 /**
  * PaxosNode defines the essential behaviors for a node participating

@@ -1,4 +1,4 @@
-package impl;
+package main.java.impl;
 
 /**
  * NetworkProfile defines different types of network behavior
