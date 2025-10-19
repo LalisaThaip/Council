@@ -1,49 +1,143 @@
 #!/bin/bash
-cd /Users/lalisa/IdeaProjects/Council
+# =========================================================
+# Paxos Council Automated Test Harness
+# Author: Lalisa
+# =========================================================
 
-# Forcefully kill all Java processes related to CouncilMember
-pkill -9 -f 'java.*CouncilMember' || true
-sleep 5  # Wait longer for processes to terminate and release ports
+# === Setup ===
+cd /Users/lalisa/IdeaProjects/Council || exit 1
 
-# Check and free ports 8001–8005
-for port in 8001 8002 8003 8004 8005; do
-    if lsof -i :$port > /dev/null; then
-        echo "Port $port is still in use, attempting to free it..."
-        lsof -i :$port | grep LISTEN | awk '{print $2}' | xargs -I {} kill -9 {} || true
-        sleep 2
-    fi
-done
+CONFIG_FILE="network.config"
+CLASS_DIR="classes"
+SRC_DIR="src"
 
-# Clean up logs and classes
-rm -rf M1.log M2.log M3.log M4.log M5.log
-rm -rf classes/*
-mkdir -p classes
-
-# Compile
-javac -d classes src/interfaces/PaxosNode.java src/impl/CouncilMember.java src/impl/NetworkConfig.java src/impl/NetworkProfile.java
-if [ $? -ne 0 ]; then
-    echo "Compilation failed!"
+# Ensure network.config exists
+if [ ! -f "$CONFIG_FILE" ]; then
+    echo "Error: $CONFIG_FILE not found!"
     exit 1
 fi
 
-# Start nodes with increased sleep time
-java -cp classes impl.CouncilMember M1 --profile reliable > M1.log 2>&1 &
-sleep 5
-java -cp classes impl.CouncilMember M2 --profile reliable > M2.log 2>&1 &
-sleep 5
-java -cp classes impl.CouncilMember M3 --profile reliable > M3.log 2>&1 &
-sleep 5
-java -cp classes impl.CouncilMember M4 --profile reliable > M4.log 2>&1 &
-sleep 5
-java -cp classes impl.CouncilMember M5 --profile reliable > M5.log 2>&1 &
-sleep 5
+# Clean up any existing Paxos processes
+echo "Cleaning up any existing CouncilMember processes..."
+pkill -f 'java.*CouncilMember' 2>/dev/null || true
+sleep 1
 
-# Propose M4 from M2
-echo "M4" | java -cp classes impl.CouncilMember M2 --profile reliable >> M2.log 2>&1
-sleep 6  # Allow ample time for consensus
+# === Build Step ===
+echo "Compiling project..."
+rm -rf "$CLASS_DIR"
+mkdir -p "$CLASS_DIR"
+javac -d "$CLASS_DIR" "$SRC_DIR"/interfaces/PaxosNode.java "$SRC_DIR"/impl/*.java
 
-# Display logs
-cat M1.log M2.log M3.log M4.log M5.log
+# Check for compilation errors
+if [ $? -ne 0 ]; then
+    echo "Compilation failed. Exiting."
+    exit 1
+fi
+echo "Build successful."
 
-# Clean up
-pkill -9 -f 'java.*CouncilMember' || true
+# === Helper Functions ===
+
+start_members() {
+    echo "Starting $1 members..."
+    for i in $(seq 1 $1); do
+        java -cp "$CLASS_DIR" impl.CouncilMember "M$i" --profile "$2" > "M$i.log" 2>&1 &
+        sleep 0.5
+    done
+    sleep 2
+}
+
+stop_members() {
+    echo "Stopping all members..."
+    pkill -f 'java.*CouncilMember' 2>/dev/null || true
+    sleep 1
+}
+
+collate_logs() {
+    echo -e "\n=== Combined Log Output ==="
+    for i in $(seq 1 $1); do
+        echo -e "\n--- M$i LOG ---\n"
+        cat "M$i.log"
+    done
+}
+
+# === SCENARIO 1: Ideal Network ===
+echo -e "\n=== Scenario 1: Ideal Network ==="
+stop_members
+start_members 9 reliable
+sleep 2
+
+# Trigger proposal (via input socket, e.g. 9004)
+echo "M5" | nc localhost 9004
+sleep 8
+
+collate_logs 9
+stop_members
+echo "=== Scenario 1 Completed ==="
+sleep 2
+
+# === SCENARIO 2: Concurrent Proposals ===
+echo -e "\n=== Scenario 2: Concurrent Proposals ==="
+stop_members
+start_members 9 reliable
+sleep 2
+
+# Trigger two proposals near-simultaneously
+(echo "M1" | nc localhost 9001) &
+sleep 0.5
+(echo "M8" | nc localhost 9008) &
+sleep 10
+
+collate_logs 9
+stop_members
+echo "=== Scenario 2 Completed ==="
+sleep 2
+
+# === SCENARIO 3: Fault Tolerance ===
+echo -e "\n=== Scenario 3: Fault Tolerance ==="
+stop_members
+
+# Profiles: M1=reliable, M2=latent, M3=failure, M4-M9=standard
+profiles=("reliable" "latent" "failure" "standard" "standard" "standard" "standard" "standard" "standard")
+for i in $(seq 1 9); do
+    java -cp "$CLASS_DIR" impl.CouncilMember "M$i" --profile "${profiles[$((i-1))]}" > "M$i.log" 2>&1 &
+    sleep 0.5
+done
+sleep 2
+
+# --- Test 3a: Standard member proposes ---
+echo -e "\n--- Test 3a: Standard member (M4) proposes ---"
+echo "M4" | nc localhost 9004
+sleep 10
+collate_logs 9
+stop_members
+sleep 2
+
+# --- Test 3b: Latent member proposes ---
+echo -e "\n--- Test 3b: Latent member (M2) proposes ---"
+for i in $(seq 1 9); do
+    java -cp "$CLASS_DIR" impl.CouncilMember "M$i" --profile "${profiles[$((i-1))]}" > "M$i.log" 2>&1 &
+    sleep 0.5
+done
+sleep 2
+echo "M2" | nc localhost 9002
+sleep 12
+collate_logs 9
+stop_members
+sleep 2
+
+# --- Test 3c: Failing member proposes ---
+echo -e "\n--- Test 3c: Failing member (M3) proposes then crashes ---"
+for i in $(seq 1 9); do
+    java -cp "$CLASS_DIR" impl.CouncilMember "M$i" --profile "${profiles[$((i-1))]}" > "M$i.log" 2>&1 &
+    sleep 0.5
+done
+sleep 2
+echo "M3" | nc localhost 9003
+sleep 5
+# M3 should crash automatically per failure profile
+sleep 8
+collate_logs 9
+stop_members
+echo "=== Scenario 3 Completed ==="
+
+echo -e "\n=== All Scenarios Completed Successfully ==="

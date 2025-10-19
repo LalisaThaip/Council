@@ -1,23 +1,4 @@
 M1 started on port 8001
-M1 received: PREPARE:M5:1.M5:M3
-M1 sending to M5: PROMISE:M1:1.M5
-M1 received: ACCEPT_REQUEST:M5:1.M5:M3
-M1 sending to M2: ACCEPTED:M1:1.M5:M3
-M1 sending to M3: ACCEPTED:M1:1.M5:M3
-M1 sending to M4: ACCEPTED:M1:1.M5:M3
-M1 sending to M5: ACCEPTED:M1:1.M5:M3
-M1 sending to M6: ACCEPTED:M1:1.M5:M3
-M1 failed to send to M6: Connection refused
-M1 sending to M7: ACCEPTED:M1:1.M5:M3
-M1 failed to send to M7: Connection refused
-M1 sending to M8: ACCEPTED:M1:1.M5:M3
-M1 failed to send to M8: Connection refused
-M1 sending to M9: ACCEPTED:M1:1.M5:M3
-M1 failed to send to M9: Connection refused
-M1 received: ACCEPTED:M4:1.M5:M3
-M1 received: ACCEPTED:M2:1.M5:M3
-M1 received: ACCEPTED:M3:1.M5:M3
-M1 handling ACCEPTED: ACCEPTED:M2:1.M5:M3
-M1 handling ACCEPTED: ACCEPTED:M4:1.M5:M3
-M1 handling ACCEPTED: ACCEPTED:M3:1.M5:M3
-CONSENSUS: M3 has been elected Council President!
+M1 started input socket on port 9001
+M1 received: PREPARE:M3:1.M3:M3
+M1 sending to M3: PROMISE:M1:1.M3

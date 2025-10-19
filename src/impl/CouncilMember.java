@@ -13,12 +13,15 @@ public class CouncilMember implements PaxosNode {
     private final Map<String, String> networkConfig;
     private final AtomicInteger proposalCounter = new AtomicInteger(0);
     private int highestProposalNumber = -1;
+    private String highestProposalId = "";
     private String acceptedValue = null;
     private int acceptedProposalNumber = -1;
+    private String acceptedProposalId = "";
     private volatile boolean isRunning = true;
     private volatile boolean hasReachedConsensus = false;
     private final Random random = new Random();
     private ServerSocket serverSocket;
+    private ServerSocket inputSocket;
     private final ExecutorService executor = Executors.newCachedThreadPool();
     private final List<String> receivedPromises = new ArrayList<>();
     private final List<String> receivedAccepts = new ArrayList<>();
@@ -27,22 +30,20 @@ public class CouncilMember implements PaxosNode {
         this.memberId = memberId;
         this.profile = "standard";
         this.networkConfig = NetworkConfig.loadConfig(configFile);
-        this.hasReachedConsensus = false;
     }
 
     @Override
     public void start() {
         String[] hostPort = networkConfig.get(memberId).split(":");
         int port = Integer.parseInt(hostPort[1]);
+        int inputPort = port + 1000; // Use a different port for proposal input (e.g., 9001 for M1)
 
-        // Try up to 3 times if port is busy
+        // Start main server socket
         for (int attempt = 1; attempt <= 3; attempt++) {
             try {
                 serverSocket = new ServerSocket(port);
                 System.out.println(memberId + " started on port " + port);
-                executor.execute(this::runServer);
-                executor.execute(this::readConsoleInput);
-                return; // success
+                break;
             } catch (BindException e) {
                 System.err.println(memberId + " port " + port + " busy (attempt " + attempt + "), retrying...");
                 try {
@@ -56,9 +57,28 @@ public class CouncilMember implements PaxosNode {
             }
         }
 
-        System.err.println(memberId + " failed to start after multiple attempts (port likely still bound).");
-    }
+        // Start input socket
+        for (int attempt = 1; attempt <= 3; attempt++) {
+            try {
+                inputSocket = new ServerSocket(inputPort);
+                System.out.println(memberId + " started input socket on port " + inputPort);
+                break;
+            } catch (BindException e) {
+                System.err.println(memberId + " input port " + inputPort + " busy (attempt " + attempt + "), retrying...");
+                try {
+                    Thread.sleep(1000);
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                }
+            } catch (IOException e) {
+                System.err.println(memberId + " failed to start input socket: " + e.getMessage());
+                return;
+            }
+        }
 
+        executor.execute(this::runServer);
+        executor.execute(this::readConsoleInput);
+    }
 
     @Override
     public void setProfile(String profile) {
@@ -67,12 +87,15 @@ public class CouncilMember implements PaxosNode {
 
     @Override
     public void propose(String candidate) {
-        if (!isRunning || hasReachedConsensus) return;
+        if (!isRunning || hasReachedConsensus) {
+            System.out.println(memberId + " cannot propose: isRunning=" + isRunning + ", hasReachedConsensus=" + hasReachedConsensus);
+            return;
+        }
         String proposalNumber = proposalCounter.incrementAndGet() + "." + memberId;
+        System.out.println(memberId + " proposing candidate " + candidate + " with proposal " + proposalNumber);
         receivedPromises.clear();
         receivedAccepts.clear();
         acceptedValue = candidate;
-
         broadcastMessage("PREPARE:" + memberId + ":" + proposalNumber + ":" + candidate);
     }
 
@@ -91,21 +114,27 @@ public class CouncilMember implements PaxosNode {
         }
 
         String[] parts = message.split(":");
+        if (parts.length < 3) {
+            System.err.println(memberId + " invalid message format: " + message);
+            return;
+        }
         String type = parts[0];
 
         switch (type) {
             case "PREPARE":
-                handlePrepare(parts);
+                if (parts.length == 4) handlePrepare(parts);
                 break;
             case "PROMISE":
                 handlePromise(parts);
                 break;
             case "ACCEPT_REQUEST":
-                handleAcceptRequest(parts);
+                if (parts.length == 4) handleAcceptRequest(parts);
                 break;
             case "ACCEPTED":
-                handleAccepted(parts);
+                if (parts.length == 4) handleAccepted(parts);
                 break;
+            default:
+                System.err.println(memberId + " unknown message type: " + type);
         }
     }
 
@@ -140,16 +169,19 @@ public class CouncilMember implements PaxosNode {
     }
 
     private void readConsoleInput() {
-        try (BufferedReader reader = new BufferedReader(new InputStreamReader(System.in))) {
-            while (isRunning && !hasReachedConsensus) {
+        while (isRunning && !hasReachedConsensus) {
+            try (Socket client = inputSocket.accept();
+                 BufferedReader reader = new BufferedReader(new InputStreamReader(client.getInputStream()))) {
                 String input = reader.readLine();
                 if (input != null && !input.trim().isEmpty()) {
-                    System.out.println(memberId + " proposing: " + input.trim());
+                    System.out.println(memberId + " received proposal input: " + input.trim());
                     propose(input.trim());
                 }
+            } catch (IOException e) {
+                if (isRunning && !hasReachedConsensus) {
+                    System.err.println(memberId + " console input error: " + e.getMessage());
+                }
             }
-        } catch (IOException e) {
-            System.err.println(memberId + " console input error: " + e.getMessage());
         }
     }
 
@@ -158,11 +190,13 @@ public class CouncilMember implements PaxosNode {
         String proposalNumber = parts[2];
         String candidate = parts[3];
 
-        if (compareProposalNumbers(proposalNumber, highestProposalNumber) > 0) {
-            highestProposalNumber = parseProposalNumber(proposalNumber);
+        if (compareProposalNumbers(proposalNumber, highestProposalNumber, highestProposalId) > 0) {
+            String[] numParts = proposalNumber.split("\\.");
+            highestProposalNumber = Integer.parseInt(numParts[0]);
+            highestProposalId = numParts[1];
             String response = "PROMISE:" + memberId + ":" + proposalNumber;
             if (acceptedValue != null) {
-                response += ":" + acceptedProposalNumber + ":" + acceptedValue;
+                response += ":" + acceptedProposalNumber + "." + acceptedProposalId + ":" + acceptedValue;
             }
             sendMessage(proposerId, response);
         }
@@ -175,8 +209,9 @@ public class CouncilMember implements PaxosNode {
         synchronized (receivedPromises) {
             if (hasReachedConsensus) return;
             receivedPromises.add(responderId);
-            if (receivedPromises.size() >= 3) { // Majority for 5 nodes
+            if (receivedPromises.size() >= 5) { // Majority for 9 nodes
                 if (acceptedValue != null) {
+                    System.out.println(memberId + " received majority promises, sending ACCEPT_REQUEST for " + acceptedValue);
                     broadcastMessage("ACCEPT_REQUEST:" + memberId + ":" + proposalNumber + ":" + acceptedValue);
                     receivedPromises.clear();
                 } else {
@@ -191,9 +226,12 @@ public class CouncilMember implements PaxosNode {
         String proposalNumber = parts[2];
         String candidate = parts[3];
 
-        if (compareProposalNumbers(proposalNumber, highestProposalNumber) >= 0) {
-            highestProposalNumber = parseProposalNumber(proposalNumber);
-            acceptedProposalNumber = parseProposalNumber(proposalNumber);
+        if (compareProposalNumbers(proposalNumber, highestProposalNumber, highestProposalId) >= 0) {
+            String[] numParts = proposalNumber.split("\\.");
+            highestProposalNumber = Integer.parseInt(numParts[0]);
+            highestProposalId = numParts[1];
+            acceptedProposalNumber = highestProposalNumber;
+            acceptedProposalId = highestProposalId;
             acceptedValue = candidate;
             processAcceptVote(memberId, candidate);
             broadcastMessage("ACCEPTED:" + memberId + ":" + proposalNumber + ":" + candidate);
@@ -213,7 +251,7 @@ public class CouncilMember implements PaxosNode {
         synchronized (receivedAccepts) {
             if (hasReachedConsensus) return;
             receivedAccepts.add(voterId);
-            if (receivedAccepts.size() >= 3) { // Majority for 5 nodes
+            if (receivedAccepts.size() >= 5) { // Majority for 9 nodes
                 System.out.println("CONSENSUS: " + candidate + " has been elected Council President!");
                 hasReachedConsensus = true;
                 isRunning = false;
@@ -221,6 +259,7 @@ public class CouncilMember implements PaxosNode {
                 executor.shutdown();
                 try {
                     serverSocket.close();
+                    inputSocket.close();
                 } catch (IOException e) {
                     // Ignore
                 }
@@ -229,6 +268,7 @@ public class CouncilMember implements PaxosNode {
     }
 
     private void broadcastMessage(String message) {
+        System.out.println(memberId + " broadcasting: " + message);
         for (String targetId : networkConfig.keySet()) {
             if (!targetId.equals(memberId)) {
                 sendMessage(targetId, message);
@@ -275,6 +315,7 @@ public class CouncilMember implements PaxosNode {
                 executor.shutdown();
                 try {
                     serverSocket.close();
+                    inputSocket.close();
                 } catch (IOException e) {
                     // Ignore
                 }
@@ -286,14 +327,14 @@ public class CouncilMember implements PaxosNode {
         return false;
     }
 
-    private int parseProposalNumber(String proposalNumber) {
-        return Integer.parseInt(proposalNumber.split("\\.")[0]);
-    }
-
-    private int compareProposalNumbers(String newProposal, int currentMax) {
+    private int compareProposalNumbers(String newProposal, int currentMax, String currentId) {
         if (currentMax == -1) return 1;
-        int newNum = parseProposalNumber(newProposal);
-        return Integer.compare(newNum, currentMax);
+        String[] newParts = newProposal.split("\\.");
+        int newNum = Integer.parseInt(newParts[0]);
+        if (newNum != currentMax) {
+            return Integer.compare(newNum, currentMax);
+        }
+        return newParts[1].compareTo(currentId);
     }
 
     public static void main(String[] args) {
