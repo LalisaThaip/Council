@@ -1,0 +1,37 @@
+M2 started on port 8002
+M2 proposing: M5
+M2 sending to M1: PREPARE:M2:1.M2:M5
+M2 sending to M3: PREPARE:M2:1.M2:M5
+M2 sending to M4: PREPARE:M2:1.M2:M5
+M2 failed to send to M4: Connection refused
+M2 sending to M5: PREPARE:M2:1.M2:M5
+M2 failed to send to M5: Connection refused
+M2 sending to M6: PREPARE:M2:1.M2:M5
+M2 failed to send to M6: Connection refused
+M2 sending to M7: PREPARE:M2:1.M2:M5
+M2 failed to send to M7: Connection refused
+M2 sending to M8: PREPARE:M2:1.M2:M5
+M2 failed to send to M8: Connection refused
+M2 sending to M9: PREPARE:M2:1.M2:M5
+M2 failed to send to M9: Connection refused
+M2 received: PROMISE:M3:1.M2
+M2 received: PROMISE:M1:1.M2
+M2 sending to M1: ACCEPT_REQUEST:M2:1.M2:M5
+M2 sending to M3: ACCEPT_REQUEST:M2:1.M2:M5
+M2 sending to M4: ACCEPT_REQUEST:M2:1.M2:M5
+M2 failed to send to M4: Connection refused
+M2 sending to M5: ACCEPT_REQUEST:M2:1.M2:M5
+M2 failed to send to M5: Connection refused
+M2 sending to M6: ACCEPT_REQUEST:M2:1.M2:M5
+M2 failed to send to M6: Connection refused
+M2 sending to M7: ACCEPT_REQUEST:M2:1.M2:M5
+M2 failed to send to M7: Connection refused
+M2 sending to M8: ACCEPT_REQUEST:M2:1.M2:M5
+M2 failed to send to M8: Connection refused
+M2 sending to M9: ACCEPT_REQUEST:M2:1.M2:M5
+M2 failed to send to M9: Connection refused
+M2 received: ACCEPTED:M3:1.M2:M5
+M2 received: ACCEPTED:M1:1.M2:M5
+M2 handling ACCEPTED: ACCEPTED:M3:1.M2:M5
+M2 handling ACCEPTED: ACCEPTED:M1:1.M2:M5
+CONSENSUS: M5 has been elected Council President!

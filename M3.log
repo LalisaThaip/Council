@@ -1,0 +1,21 @@
+M3 started on port 8003
+M3 received: PREPARE:M2:1.M2:M5
+M3 sending to M2: PROMISE:M3:1.M2
+M3 received: ACCEPT_REQUEST:M2:1.M2:M5
+M3 sending to M1: ACCEPTED:M3:1.M2:M5
+M3 sending to M2: ACCEPTED:M3:1.M2:M5
+M3 sending to M4: ACCEPTED:M3:1.M2:M5
+M3 failed to send to M4: Connection refused
+M3 sending to M5: ACCEPTED:M3:1.M2:M5
+M3 failed to send to M5: Connection refused
+M3 sending to M6: ACCEPTED:M3:1.M2:M5
+M3 failed to send to M6: Connection refused
+M3 sending to M7: ACCEPTED:M3:1.M2:M5
+M3 failed to send to M7: Connection refused
+M3 sending to M8: ACCEPTED:M3:1.M2:M5
+M3 failed to send to M8: Connection refused
+M3 sending to M9: ACCEPTED:M3:1.M2:M5
+M3 failed to send to M9: Connection refused
+M3 received: ACCEPTED:M1:1.M2:M5
+M3 handling ACCEPTED: ACCEPTED:M1:1.M2:M5
+CONSENSUS: M5 has been elected Council President!
