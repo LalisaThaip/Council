@@ -1,0 +1,26 @@
+M6 started on port 8006
+M6 started input socket on port 9006
+M6 received: PREPARE:M3:1.M3:M3
+M6 sending to M3: PROMISE:M6:1.M3
+M6 received: PREPARE:M4:1.M4:M4
+M6 sending to M4: PROMISE:M6:1.M4
+M6 received: ACCEPT_REQUEST:M4:1.M4:M4
+M6 broadcasting: ACCEPTED:M6:1.M4:M4
+M6 sending to M1: ACCEPTED:M6:1.M4:M4
+M6 sending to M2: ACCEPTED:M6:1.M4:M4
+M6 sending to M3: ACCEPTED:M6:1.M4:M4
+M6 failed to send to M3: Connection refused
+M6 sending to M4: ACCEPTED:M6:1.M4:M4
+M6 sending to M5: ACCEPTED:M6:1.M4:M4
+M6 sending to M7: ACCEPTED:M6:1.M4:M4
+M6 sending to M8: ACCEPTED:M6:1.M4:M4
+M6 sending to M9: ACCEPTED:M6:1.M4:M4
+M6 received: ACCEPTED:M9:1.M4:M4
+M6 handling ACCEPTED: ACCEPTED:M9:1.M4:M4
+M6 received: ACCEPTED:M5:1.M4:M4
+M6 handling ACCEPTED: ACCEPTED:M5:1.M4:M4
+M6 received: ACCEPTED:M7:1.M4:M4
+M6 handling ACCEPTED: ACCEPTED:M7:1.M4:M4
+M6 received: ACCEPTED:M1:1.M4:M4
+M6 handling ACCEPTED: ACCEPTED:M1:1.M4:M4
+CONSENSUS: M4 has been elected Council President!

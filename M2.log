@@ -1,0 +1,17 @@
+M2 started on port 8002
+M2 started input socket on port 9002
+M2 received: PREPARE:M3:1.M3:M3
+M2 sending to M3: PROMISE:M2:1.M3
+M2 received: PREPARE:M4:1.M4:M4
+M2 sending to M4: PROMISE:M2:1.M4
+M2 received: ACCEPTED:M8:1.M4:M4
+M2 handling ACCEPTED: ACCEPTED:M8:1.M4:M4
+M2 received: ACCEPTED:M6:1.M4:M4
+M2 handling ACCEPTED: ACCEPTED:M6:1.M4:M4
+M2 received: ACCEPTED:M9:1.M4:M4
+M2 handling ACCEPTED: ACCEPTED:M9:1.M4:M4
+M2 received: ACCEPTED:M5:1.M4:M4
+M2 handling ACCEPTED: ACCEPTED:M5:1.M4:M4
+M2 received: ACCEPTED:M7:1.M4:M4
+M2 handling ACCEPTED: ACCEPTED:M7:1.M4:M4
+CONSENSUS: M4 has been elected Council President!

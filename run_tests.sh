@@ -6,11 +6,13 @@
 # =========================================================
 
 # === Setup ===
-cd /Users/lalisa/IdeaProjects/Council || exit 1
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$SCRIPT_DIR" || exit 1
 
 CONFIG_FILE="network.config"
 CLASS_DIR="classes"
 SRC_DIR="src"
+[ -d "src/main/java" ] && SRC_DIR="src/main/java"  # handle Maven-style layout
 
 # Ensure network.config exists
 if [ ! -f "$CONFIG_FILE" ]; then
@@ -18,41 +20,53 @@ if [ ! -f "$CONFIG_FILE" ]; then
     exit 1
 fi
 
-# Clean up any existing Paxos processes and ports
+# === Build Step ===
+echo "Compiling project..."
+rm -rf "$CLASS_DIR"
+mkdir -p "$CLASS_DIR/main/java"
+
+# Compile all .java files under $SRC_DIR, recursively
+if ! find "$SRC_DIR" -name '*.java' -print0 | xargs -0 javac -d "$CLASS_DIR/main/java"; then
+  echo "Compilation failed. Exiting."
+  exit 1
+fi
+echo "Build successful."
+
+# Resolve main class and classpath for CouncilMember (fixes ClassNotFound)
+MAIN_CP="$CLASS_DIR/main/java"
+MAIN_CLASS_FILE=$(find "$MAIN_CP" -type f -name 'CouncilMember.class' | head -n 1)
+if [ -z "$MAIN_CLASS_FILE" ]; then
+  echo "Error: CouncilMember.class not found under $MAIN_CP"
+  exit 1
+fi
+MAIN_CLASS="${MAIN_CLASS_FILE#$MAIN_CP/}"
+MAIN_CLASS="${MAIN_CLASS%.class}"
+MAIN_CLASS="${MAIN_CLASS//\//.}"
+echo "Detected main class: $MAIN_CLASS"
+
+# === Helper Functions ===
+
+# Clean up function
 cleanup() {
     echo "Cleaning up processes and ports..."
     pkill -f 'java.*CouncilMember' 2>/dev/null || true
-    sleep 5
+    sleep 3
     for port in {8001..8009} {9001..9009}; do
-        if lsof -i :$port > /dev/null; then
-            echo "Port $port is still in use, attempting to free it..."
-            lsof -i :$port | grep LISTEN | awk '{print $2}' | xargs -I {} kill -9 {} || true
-            sleep 1
+        if command -v lsof >/dev/null 2>&1; then
+            if lsof -i :"$port" >/dev/null 2>&1; then
+                lsof -ti :"$port" | xargs -r kill -9 2>/dev/null || true
+            fi
         fi
     done
     rm -f M*.log M*.pid
 }
-
-# === Build Step ===
-echo "Compiling project..."
-rm -rf "$CLASS_DIR"
-mkdir -p "$CLASS_DIR"
-javac -d "$CLASS_DIR" "$SRC_DIR"/interfaces/PaxosNode.java "$SRC_DIR"/impl/*.java
-
-if [ $? -ne 0 ]; then
-    echo "Compilation failed. Exiting."
-    exit 1
-fi
-echo "Build successful."
-
-# === Helper Functions ===
 
 start_members() {
     local count=$1
     local profile=$2
     echo "Starting $count members with profile $profile..."
     for i in $(seq 1 $count); do
-        java -cp "$CLASS_DIR" impl.CouncilMember "M$i" --profile "$profile" > "M$i.log" 2>&1 &
+        java -cp "$MAIN_CP" "$MAIN_CLASS" "M$i" --profile "$profile" > "M$i.log" 2>&1 &
         echo $! > "M$i.pid"
         sleep 1
     done
@@ -65,7 +79,7 @@ start_members_with_profiles() {
     local profiles=("$@")
     echo "Starting $count members with specified profiles..."
     for i in $(seq 1 $count); do
-        java -cp "$CLASS_DIR" impl.CouncilMember "M$i" --profile "${profiles[$((i-1))]}" > "M$i.log" 2>&1 &
+        java -cp "$MAIN_CP" "$MAIN_CLASS" "M$i" --profile "${profiles[$((i-1))]}" > "M$i.log" 2>&1 &
         echo $! > "M$i.pid"
         sleep 1
     done
@@ -180,7 +194,6 @@ check_concurrent_majority() {
     done
 }
 
-
 # === SCENARIO 1: Ideal Network ===
 echo -e "\n=== Scenario 1: Ideal Network ==="
 cleanup
@@ -244,7 +257,7 @@ sleep 5
 
 echo "Killing M3 to simulate crash"
 if [ -f M3.pid ]; then
-    kill -9 $(cat M3.pid) 2>/dev/null
+    kill -9 "$(cat M3.pid)" 2>/dev/null
     sleep 5
 fi
 

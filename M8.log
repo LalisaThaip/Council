@@ -1,0 +1,27 @@
+M8 started on port 8008
+M8 started input socket on port 9008
+M8 received: PREPARE:M3:1.M3:M3
+M8 sending to M3: PROMISE:M8:1.M3
+M8 received: PREPARE:M4:1.M4:M4
+M8 sending to M4: PROMISE:M8:1.M4
+M8 received: ACCEPT_REQUEST:M4:1.M4:M4
+M8 broadcasting: ACCEPTED:M8:1.M4:M4
+M8 sending to M1: ACCEPTED:M8:1.M4:M4
+M8 failed to send to M1: Connection refused
+M8 sending to M2: ACCEPTED:M8:1.M4:M4
+M8 sending to M3: ACCEPTED:M8:1.M4:M4
+M8 failed to send to M3: Connection refused
+M8 sending to M4: ACCEPTED:M8:1.M4:M4
+M8 sending to M5: ACCEPTED:M8:1.M4:M4
+M8 sending to M6: ACCEPTED:M8:1.M4:M4
+M8 sending to M7: ACCEPTED:M8:1.M4:M4
+M8 sending to M9: ACCEPTED:M8:1.M4:M4
+M8 received: ACCEPTED:M6:1.M4:M4
+M8 handling ACCEPTED: ACCEPTED:M6:1.M4:M4
+M8 received: ACCEPTED:M9:1.M4:M4
+M8 handling ACCEPTED: ACCEPTED:M9:1.M4:M4
+M8 received: ACCEPTED:M5:1.M4:M4
+M8 handling ACCEPTED: ACCEPTED:M5:1.M4:M4
+M8 received: ACCEPTED:M7:1.M4:M4
+M8 handling ACCEPTED: ACCEPTED:M7:1.M4:M4
+CONSENSUS: M4 has been elected Council President!
