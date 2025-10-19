@@ -1,4 +1,0 @@
-Error reading config: network.config (No such file or directory)
-Exception in thread "main" java.lang.NullPointerException: Cannot invoke "String.split(String)" because the return value of "java.util.Map.get(Object)" is null
-	at main.java.impl.CouncilMember.start(CouncilMember.java:88)
-	at main.java.impl.CouncilMember.main(CouncilMember.java:540)

@@ -1,4 +1,4 @@
-package test;
+package test.java.test.integration;
 
 import main.java.impl.CouncilMember;
 import org.junit.jupiter.api.*;

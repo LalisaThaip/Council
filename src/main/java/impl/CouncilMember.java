@@ -30,12 +30,16 @@ public class CouncilMember implements PaxosNode {
     private String profile;
     // Map of member IDs to their host:port configurations, loaded from network.config.
     private final Map<String, String> networkConfig;
+
+
     // Counter for generating unique proposal numbers, incremented per proposal.
     private final AtomicInteger proposalCounter = new AtomicInteger(0);
     // Highest proposal number seen so far, used to compare proposals.
     private int highestProposalNumber = -1;
     // Member ID associated with the highest proposal number.
     private String highestProposalId = "";
+
+
     // Value accepted by this node (e.g., candidate name like "M5").
     private String acceptedValue = null;
     // Proposal number of the accepted value.
@@ -44,14 +48,19 @@ public class CouncilMember implements PaxosNode {
     private String acceptedProposalId = "";
     // Flag indicating if the node is running and accepting messages.
     private volatile boolean isRunning = true;
+
     // Flag indicating if consensus has been reached, stopping further processing.
     private volatile boolean hasReachedConsensus = false;
+
+
     // Random number generator for simulating latency and failures.
     private final Random random = new Random();
     // Server socket for receiving Paxos messages (e.g., PREPARE, PROMISE).
     private ServerSocket serverSocket;
     // Server socket for receiving proposal inputs (e.g., candidate names).
     private ServerSocket inputSocket;
+
+    
     // Thread pool for handling incoming messages and input asynchronously.
     private final ExecutorService executor = Executors.newCachedThreadPool();
     // List of member IDs that sent PROMISE messages for the current proposal.
@@ -454,8 +463,8 @@ public class CouncilMember implements PaxosNode {
      *
      * @return The latency in milliseconds:
      *         - reliable: 10ms
-     *         - latent: 500–2000ms
-     *         - standard: 50–250ms
+     *         - latent: 2000–5000ms
+     *         - standard: 50–300ms
      *         - failure: 0ms
      *         - default: 50ms
      */
@@ -464,9 +473,9 @@ public class CouncilMember implements PaxosNode {
             case "reliable":
                 return 10;
             case "latent":
-                return 500 + random.nextInt(1500);
+                return 2000 + random.nextInt(3000);
             case "standard":
-                return 50 + random.nextInt(200);
+                return 50 + random.nextInt(250);
             case "failure":
                 return 0;
             default:
