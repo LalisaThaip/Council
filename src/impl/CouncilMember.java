@@ -255,7 +255,7 @@ public class CouncilMember implements PaxosNode {
 
     /**
      * Reads proposal inputs from the input socket (e.g., port 9001 for M1).
-     * Triggers the propose method when a valid candidate ID is received.
+     * Triggers the propose() method when a valid candidate ID is received.
      */
     private void readConsoleInput() {
         while (isRunning && !hasReachedConsensus) {
